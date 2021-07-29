@@ -7,6 +7,8 @@ import os
 app = Flask(__name__)
 
 MODEL_DIR = '.'
+SRC_LANG= 'en'
+TGT_LANG = 'tr'
 
 cur_dir = os.path.dirname(__file__)
 db = os.path.join(cur_dir, 'trReviews.sqlite')
@@ -27,7 +29,7 @@ class ReviewForm(Form):
 @app.before_first_request
 def loading():
     global confo
-    confo = load_model(".")
+    confo = load_model(MODEL_DIR, SRC_LANG, TGT_LANG)
 
 
 @app.route("/")

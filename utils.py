@@ -1,5 +1,6 @@
 from torchtext import data
-from torchtext.datasets import TranslationDataset
+from torchtext.legacy.datasets import TranslationDataset
+from torchtext.legacy.data import Field, Example
 
 
 from joeynmt.constants import UNK_TOKEN, EOS_TOKEN, BOS_TOKEN, PAD_TOKEN
@@ -10,7 +11,7 @@ class MonoLineDataset(TranslationDataset):
         examples = []
         line = line.strip()
         fields = [('src', field)]
-        examples.append(data.Example.fromlist([line], fields))
+        examples.append(Example.fromlist([line], fields))
         super(TranslationDataset, self).__init__(examples, fields, **kwargs)
 
 
@@ -31,12 +32,12 @@ def load_line_as_data(line, level, lowercase, src_vocab, trg_vocab):
     else:  # bpe or word, pre-tokenized
         tok_fun = lambda s: s.split()
 
-    src_field = data.Field(init_token=None, eos_token=EOS_TOKEN,  # FIXME
+    src_field = Field(init_token=None, eos_token=EOS_TOKEN,  # FIXME
                            pad_token=PAD_TOKEN, tokenize=tok_fun,
                            batch_first=True, lower=lowercase,
                            unk_token=UNK_TOKEN,
                            include_lengths=True)
-    trg_field = data.Field(init_token=BOS_TOKEN, eos_token=EOS_TOKEN,
+    trg_field = Field(init_token=BOS_TOKEN, eos_token=EOS_TOKEN,
                            pad_token=PAD_TOKEN, tokenize=tok_fun,
                            unk_token=UNK_TOKEN,
                            batch_first=True, lower=lowercase,

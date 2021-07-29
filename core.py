@@ -10,6 +10,8 @@ from joeynmt.vocabulary import build_vocab
 from joeynmt.model import build_model
 from joeynmt.prediction import validate_on_data
 
+from bpemb import BPEmb
+
 
 def translate(message_text, model, src_vocab, trg_vocab, preprocess, postprocess,
               logger, beam_size, beam_alpha, level, lowercase,
@@ -49,9 +51,14 @@ def translate(message_text, model, src_vocab, trg_vocab, preprocess, postprocess
     score, loss, ppl, sources, sources_raw, references, hypotheses, \
     hypotheses_raw, attention_scores = validate_on_data(
         model, data=test_data, batch_size=1, level=level,
-        max_output_length=max_output_length, eval_metric=None,
-        use_cuda=use_cuda, loss_function=None, beam_size=beam_size,
-        beam_alpha=beam_alpha, logger=logger)
+        use_cuda=use_cuda, beam_size=beam_size,
+        max_output_length=max_output_length,eval_metric=None, n_gpu=0)
+
+    # hypotheses_raw, attention_scores = validate_on_data(
+    #     model, data=test_data, batch_size=1, level=level,
+    #     max_output_length=max_output_length, eval_metric=None,
+    #     use_cuda=use_cuda, loss_function=None, beam_size=beam_size,
+    #     beam_alpha=beam_alpha, logger=logger)
 
     # post-process
     if level == "char":
@@ -65,7 +72,7 @@ def translate(message_text, model, src_vocab, trg_vocab, preprocess, postprocess
     return response
 
 
-def load_model(model_dir, bpe_src_code=None, tokenize=None):
+def load_model(model_dir, bpemb_src_lang, bpemb_tgt_lang, bpe_src_code=None, tokenize=None):
     """
     Start the bot. This means loading the model according to the config file.
 
@@ -114,30 +121,48 @@ def load_model(model_dir, bpe_src_code=None, tokenize=None):
         conf["beam_alpha"] = -1
 
     # pre-processing
-    if tokenize is not None:
-        src_tokenizer = MosesTokenizer(lang=cfg["data"]["src"])
-        trg_tokenizer = MosesDetokenizer(lang=cfg["data"]["trg"])
-        # tokenize input
-        tokenizer = lambda x: src_tokenizer.tokenize(x, return_str=True)
-        detokenizer = lambda x: trg_tokenizer.detokenize(
-            x.split(), return_str=True)
-    else:
-        tokenizer = lambda x: x
-        detokenizer = lambda x: x
+    # if tokenize is not None:
+    #     src_tokenizer = MosesTokenizer(lang=cfg["data"]["src"])
+    #     trg_tokenizer = MosesDetokenizer(lang=cfg["data"]["trg"])
+    #     # tokenize input
+    #     tokenizer = lambda x: src_tokenizer.tokenize(x, return_str=True)
+    #     detokenizer = lambda x: trg_tokenizer.detokenize(
+    #         x.split(), return_str=True)
+    # else:
+    #     tokenizer = lambda x: x
+    #     detokenizer = lambda x: x
 
-    if bpe_src_code is not None and level == "bpe":
-        # load bpe merge file
-        merge_file = open(bpe_src_code, "r")
-        bpe = apply_bpe.BPE(codes=merge_file)
-        segmenter = lambda x: bpe.process_line(x.strip())
-    elif conf["level"] == "char":
-        # split to chars
-        segmenter = lambda x: list(x.strip())
-    else:
-        segmenter = lambda x: x.strip()
+    # if bpe_src_code is not None and level == "bpe":
+    #     # load bpe merge file
+    #     merge_file = open(bpe_src_code, "r")
+    #     bpe = apply_bpe.BPE(codes=merge_file)
+    #     segmenter = lambda x: bpe.process_line(x.strip())
+    # elif conf["level"] == "char":
+    #     # split to chars
+    #     segmenter = lambda x: list(x.strip())
+    # else:
+    #     segmenter = lambda x: x.strip()
 
-    conf["preprocess"] = [tokenizer, segmenter]
-    conf["postprocess"] = [detokenizer]
+    if bpemb_src_lang:
+        bpember_src = BPEmb(lang=bpemb_src_lang, 
+                        segmentation_only=True,
+                        preprocess=False)
+        preprocessor = lambda x:" ".join(bpember_src.encode(x.lower()))
+    else:
+        preprocessor = lambda x: x.strip()
+
+    if bpemb_tgt_lang:
+        bpember_tgt = BPEmb(lang=bpemb_tgt_lang, 
+                        segmentation_only=True,
+                        preprocess=False)
+
+        
+        postprocessor = lambda x:bpember_tgt.decode(x.split())
+    else:
+        postprocessor = lambda x: x
+
+    conf["preprocess"] = [preprocessor]
+    conf["postprocess"] = [postprocessor]
     # build model and load parameters into it
     model_checkpoint = load_checkpoint(ckpt, conf["use_cuda"])
     model = build_model(cfg["model"], src_vocab=conf["src_vocab"], trg_vocab=conf["trg_vocab"])
